@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EQ-SANS in 3D</title>
+    <meta name="description" content="An interactive 3D model of the EQ-SANS small-angle neutron scattering instrument (BL-6, SNS): exploded view and a time-of-flight neutron beam animation." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="eqsans.css?v=25" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three/three.module.min.js",
+          "three/addons/": "./vendor/three/addons/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <canvas id="scene" aria-label="3D model of the EQ-SANS instrument"></canvas>
+    <div id="labels"></div>
+
+    <header class="top">
+      <a class="back" href="https://github.com/cw-do/eqsans-model">GitHub</a>
+      <div class="brand">EQ-SANS <span>Extended Q-range SANS · Beamline 6 · SNS</span></div>
+    </header>
+
+    <aside id="parts">
+      <button id="parts-toggle" type="button" aria-expanded="true" title="Show or hide the component list"><i>▾</i> Components</button>
+      <ul id="partlist"></ul>
+    </aside>
+
+    <section id="info" hidden>
+      <button id="info-close" type="button" aria-label="Close">×</button>
+      <p class="loc" id="info-loc"></p>
+      <h2 id="info-name"></h2>
+      <p id="info-text"></p>
+    </section>
+
+    <section id="hud" hidden>
+      <div class="hud-head">
+        <b>Detector</b>
+        <span id="counts">0 counts</span>
+        <button id="hud-close" type="button" aria-label="Hide detector window" title="Hide">×</button>
+      </div>
+      <div class="plots"><canvas id="det2d" width="200" height="200" title="Detector image"></canvas><canvas id="iq" width="400" height="300" title="I(Q): points = measured, line = sphere model"></canvas></div>
+      <div class="seg" role="group" aria-label="Detector image">
+        <button type="button" data-view="q" class="on">Reduced to Q</button>
+        <button type="button" data-view="raw">Raw pixels</button>
+      </div>
+      <label>Sample–detector distance <output id="sdd-out">4.0 m</output>
+        <input id="sdd" type="range" min="1.3" max="8" step="0.1" value="4" />
+      </label>
+      <label>Minimum wavelength → band <output id="lmin-out">2.5 – 6.2 Å</output>
+        <input id="lmin" type="range" min="1" max="15" step="0.1" value="2.5" />
+      </label>
+      <label>Sphere radius <output id="rs-out">60 Å</output>
+        <input id="rs" type="range" min="25" max="150" step="5" value="60" />
+      </label>
+      <label>Time scale <output id="speed-out">1.0×</output>
+        <input id="speed" type="range" min="0.25" max="3" step="0.25" value="1" />
+      </label>
+      <div class="legend">
+        <span>1 Å</span><i></i><span class="lam-top">10 Å</span>
+      </div>
+      <div class="seg" id="lamtop" role="group" aria-label="Longest wavelength shown">
+        <button type="button" data-top="10" class="on">up to 10 Å</button>
+        <button type="button" data-top="15">15 Å</button>
+        <button type="button" data-top="20">20 Å</button>
+      </div>
+      <p class="hint">Bead colour = neutron wavelength. Fast (short-λ) neutrons outrun slow ones, and the three choppers pass only one band.</p>
+    </section>
+
+    <section id="tof" hidden>
+      <div class="hud-head">
+        <b>Time–distance</b>
+        <span id="tof-band" style="color: var(--holo)"></span>
+        <button id="tof-close" type="button" aria-label="Hide time–distance plot" title="Hide">×</button>
+      </div>
+      <canvas id="tofplot" width="840" height="560" title="Time–distance diagram: each line is one wavelength"></canvas>
+      <div class="legend"><span>1 Å</span><i></i><span class="lam-top">10 Å</span></div>
+      <p class="hint">Each line is one wavelength leaving the moderator; the slope is its speed. White bars are the choppers while closed. The choppers are phased from the minimum wavelength so the band (dashed edges) just fills one 16.7 ms frame at the detector.</p>
+    </section>
+
+    <p id="caption" hidden></p>
+
+    <section id="hide-menu" hidden>
+      <b>Hide structures</b>
+      <div id="hide-list"></div>
+      <button id="hide-all" type="button">Hide / show all</button>
+    </section>
+
+    <nav id="actions">
+      <button id="btn-explode" type="button">Explode</button>
+      <button id="btn-beam" type="button">Neutron beam</button>
+      <button id="btn-tour" type="button">Ride the pulse</button>
+      <button id="btn-hud" type="button" hidden>Detector window</button>
+      <button id="btn-tof" type="button" hidden>Time–distance</button>
+      <button id="btn-xray" type="button">X-ray view</button>
+      <button id="btn-hide" type="button" aria-haspopup="true">Hide</button>
+      <button id="btn-labels" type="button" class="on">Labels</button>
+      <button id="btn-reset" type="button">Reset view</button>
+    </nav>
+
+    <div id="loader"><div class="ring"></div><p>Assembling the beamline…</p></div>
+    <script type="module" src="main.js?v=25"></script>
+  </body>
+</html>
