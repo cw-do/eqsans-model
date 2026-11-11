@@ -138,7 +138,7 @@ body.site #labels, body.site #parts, body.site #actions, body.site #hud, body.si
 /* disclaimer strip: the model is approximate, not a CAD drawing or a survey */
 #disclaimer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: flex; align-items: center; gap: 16px; margin: 0; padding: 5px 16px 6px; text-align: center; font-size: 11px; line-height: 1.35; color: var(--ink-2); background: var(--panel); border-top: 1px solid var(--stroke); backdrop-filter: blur(8px); pointer-events: none; }
 #disclaimer p { margin: 0; flex: 1; }
-#disclaimer .credit { flex: none; text-align: right; color: var(--ink-3); white-space: nowrap; }
+#disclaimer .credit { flex: none; text-align: right; color: var(--ink); font-weight: 600; white-space: nowrap; }
 #disclaimer i { font-style: normal; }
 #disclaimer b { color: #ffcf6b; font-weight: 600; margin-right: 4px; }
 #disclaimer .d-site { display: none; }

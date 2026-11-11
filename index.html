@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="eqsans.css?v=34" />
+    <link rel="stylesheet" href="eqsans.css?v=35" />
     <script type="importmap">
       {
         "imports": {
@@ -65,11 +65,11 @@
         <input id="speed" type="range" min="0.25" max="3" step="0.25" value="1" />
       </label>
       <div class="legend">
-        <span>1 Å</span><i></i><span class="lam-top">10 Å</span>
+        <span>1 Å</span><i></i><span class="lam-top">15 Å</span>
       </div>
       <div class="seg" id="lamtop" role="group" aria-label="Longest wavelength shown">
-        <button type="button" data-top="10" class="on">up to 10 Å</button>
-        <button type="button" data-top="15">15 Å</button>
+        <button type="button" data-top="10">up to 10 Å</button>
+        <button type="button" data-top="15" class="on">15 Å</button>
         <button type="button" data-top="20">20 Å</button>
       </div>
       <p class="hint">Bead colour = neutron wavelength. Fast (short-λ) neutrons outrun slow ones, and the three choppers pass only one band.</p>
@@ -82,7 +82,7 @@
         <button id="tof-close" type="button" aria-label="Hide time–distance plot" title="Hide">×</button>
       </div>
       <canvas id="tofplot" width="840" height="560" title="Time–distance diagram: each line is one wavelength"></canvas>
-      <div class="legend"><span>1 Å</span><i></i><span class="lam-top">10 Å</span></div>
+      <div class="legend"><span>1 Å</span><i></i><span class="lam-top">15 Å</span></div>
       <p class="hint">Each line is one wavelength leaving the moderator; the slope is its speed. White bars are the choppers while closed. The choppers are phased from the minimum wavelength so the band (dashed edges) just fills one 16.7 ms frame at the detector.</p>
     </section>
 
@@ -127,6 +127,6 @@
     </footer>
 
     <div id="loader"><div class="ring"></div><p>Assembling the beamline…</p></div>
-    <script type="module" src="main.js?v=35"></script>
+    <script type="module" src="main.js?v=38"></script>
   </body>
 </html>

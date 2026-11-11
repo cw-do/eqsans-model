@@ -27,7 +27,7 @@ const BEAMSTOP_R = 0.025;
 // Time-of-flight, slowed 180×: one 60 Hz source period (16.7 ms) lasts 3 s here.
 const PERIOD = 3;
 const KV = 3956 / 180;                    // speed [m/s] = KV / λ[Å]
-let LAM_TOP = 10;                         // longest wavelength of the colour scale and of the emitted spectrum
+let LAM_TOP = 15;                         // longest wavelength of the colour scale and of the emitted spectrum
 let LAM_MIN = 2.5, LAM_MAX = 6.16, LAM_C = 4.33;   // transmitted band; set by setBand() from λmin and the detector distance
 
 const TH_BEND = (S_BEND1 - S_BEND0) / R_BEND;
@@ -942,7 +942,7 @@ function setExplode(on) {
   $('btn-explode').classList.toggle('on', on); $('btn-explode').textContent = on ? 'Reassemble' : 'Explode';
   if (on) { setBeam(false); setXray(false); flyTo(new THREE.Vector3(2, 21, 40), new THREE.Vector3(12.5, 2.2, 0), 2.6); }
 }
-function setBeam(on) {
+function setBeam(on, move = true) {
   beamOn = on; points.visible = on || points.visible;
   $('btn-beam').classList.toggle('on', on); $('btn-beam').textContent = on ? 'Stop beam' : 'Neutron beam';
   syncHud();
@@ -950,7 +950,7 @@ function setBeam(on) {
     if (exploded) setExplode(false);
     setXray(true); clearData(); nextPulse = Math.ceil(simT / PERIOD) * PERIOD; pulseTimes.length = 0;
     if (window.innerWidth > 820) $('info').hidden = true;
-    flyTo(new THREE.Vector3(6, 8.5, 27), new THREE.Vector3(11.5, 1.2, 0), 2.2);
+    if (move) flyTo(new THREE.Vector3(6, 8.5, 27), new THREE.Vector3(11.5, 1.2, 0), 2.2);
   } else { stopTour(); clearNeutrons(); points.visible = false; }
 }
 $('btn-explode').onclick = () => setExplode(!exploded);
@@ -1205,7 +1205,8 @@ function updateDive(dt) {
   applyEnv(1 - sstep(u, 0.36, 0.7));                              // daylight → hall
   site.setFade(1 - sstep(u, 0.5, 0.78));                          // then the other beamlines and the rest of the site
   if (uiSite && u > 0.8) { setUi(false); controls.maxDistance = 5000; }
-  if (u >= 1) { site.group.visible = false; applyEnv(0); dive = null; mode = 'inst'; controls.enabled = true; controls.maxDistance = 90; }
+  if (u >= 1) { site.group.visible = false; applyEnv(0); dive = null; mode = 'inst'; controls.enabled = true; controls.maxDistance = 90;
+    setBeam(true, false); setTof(true); }                         // arrive with the beam running, shells in X-ray, time–distance plot open
 }
 $('btn-dive').onclick = startDive;
 $('btn-skip').onclick = showInstrument;
