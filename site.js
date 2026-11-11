@@ -40,6 +40,9 @@ export function buildSite(THREE) {
   const S = 0.3048;
   const F = frame(0, S, 199 * S, -1090 * S);
   const W = frame(-0.34979, -0.60576, 34.52, 704.94);
+  // G — 2026 close-up of CNMS and the office building, 100 ft = 85 px; fitted to three target-building corners (residual ≤ 2 m)
+  const G = frame(-0.169373, -0.329760, -132.456, 173.266);
+  const labelAt = {};
   // image-space helpers: sizes in pixels, angles in degrees measured in the image (y down)
   const ry = (Fr, phi) => -(Fr.arg + phi * D);
   const ibox = (Fr, px, py, wp, dp, h, mat, phi = 0, y0 = 0) => { const [x, z] = Fr.P(px, py); return box(wp * Fr.s, h, dp * Fr.s, mat, x, y0 + h / 2, z, ry(Fr, phi)); };
@@ -50,7 +53,6 @@ export function buildSite(THREE) {
   const flat = (Fr, pts, mat, y) => iprism(Fr, pts, 0.06, mat, y);   // ground patches; y orders the layers
 
   // ── where things are ──
-  const RING = { x: 40, z: 230, r: 40 };
   // linac: the tunnel runs under the berm just north of the klystron gallery (the long building in the photo)
   const G0 = W.P(60, 830), G1 = W.P(610, 570);
   const gdx = G1[0] - G0[0], gdz = G1[1] - G0[1], glen = Math.hypot(gdx, gdz), gnx = -gdz / glen, gnz = gdx / glen;   // gn = south of the linac
@@ -178,26 +180,44 @@ export function buildSite(THREE) {
     for (let px = 690; px <= 920; px += 46) add(ibox(F, px, 331, 3, 6, 6.6, M.wall2));
   }
 
-  // ── central laboratory and office building (CLO): a curved wing facing the lawn, a flat block and a narrow tall bar ──
+  // ── CLO, the block behind it and CNMS, traced in H, the sharpest 2026 close-up (0.19 m/px, fitted through G) ──
+  // Kept deliberately simple: two arc buildings, the CLO wing facing the lawn and the long building along Argonne
+  // Drive (the wing the bridge comes into, then CNMS), with a flat block filling the space between them.
   {
-    const [cx, cy] = [32.6, 403.7];                                 // centre of the curve in the close-up, px
-    const A0 = -33 * D, A1 = 27 * D;
-    const arc = (r0, r1, a0, a1) => ipts(F, sector(cx, cy, r0, r1, a0, a1));
-    add(prism(arc(418, 455, A0, A1), 22, M.wall), prism(arc(416, 457, A0, A1), 0.5, M.roof, 22));
-    for (let k = 0; k < 5; k++) add(prism(arc(416.6, 456.4, A0 + 0.01, A1 - 0.01), 1.6, M.glass, 2.6 + k * 3.8));
-    add(prism(arc(392, 416, A0 + 0.04, A1 - 0.06), 9, M.wall2), prism(arc(391, 417, A0 + 0.04, A1 - 0.06), 0.4, M.roof, 9));
-    add(prism(arc(420, 453, -2 * D, 8 * D), 3.2, M.wall2, 22.5));   // penthouse
-    bldg(F, [300, 120], [395, 165], 55, 12, M.wall2);               // north end of the curve
-    bldg(F, [520 + 42, 305], [520 + 42, 545], 85, 15, M.wall);       // flat block
-    bldg(F, [623, 195], [623, 445], 36, 19, M.wall);                 // narrow bar; the bridge comes in here
-    bldg(F, [626, 445], [626, 560], 28, 9, M.wall2);
+    const H = frame(-0.191117, -0.006236, 96.524, -61.149);
+    // drop collinear points first: earcut turns them into zero-area cap triangles whose zero normals become NaN in the
+    // shader, and bloom spreads that NaN into a black rectangle over the screen
+    const simplify = (pts) => pts.filter((p, i) => {
+      const a = pts[(i + pts.length - 1) % pts.length], c = pts[(i + 1) % pts.length];
+      return Math.abs((p[0] - a[0]) * (c[1] - a[1]) - (p[1] - a[1]) * (c[0] - a[0])) > 0.5;
+    });
+    const hp = (pts, h, mat, y = 0) => add(prism(ipts(H, simplify(pts)), h, mat, y));
+    const grow = (pts, k) => {
+      const cx = pts.reduce((t, p) => t + p[0], 0) / pts.length, cy = pts.reduce((t, p) => t + p[1], 0) / pts.length;
+      return pts.map(([x, y]) => [cx + (x - cx) * k, cy + (y - cy) * k]);
+    };
+    const block = (pts, h, mat = M.wall, glass = true) => {
+      hp(pts, h, mat); hp(grow(pts, 1.012), 0.5, M.roof, h);
+      if (glass) for (let y = 2.6; y < h - 1.5; y += 3.8) hp(grow(pts, 1.008), 1.6, M.glass, y);
+    };
+    // two arc-shaped buildings with the flat block between them, each arc a circle fitted to the H outline:
+    // CLO (centre out on the lawn, fit within 4 px) and the long building along Argonne Drive, CNMS at its
+    // north-east end (centre on the far side of the road, fit within 11 px ≈ 2 m)
+    const arcWing = (C, r0, r1, a0, a1, h, mat = M.wall, glass = true) => {
+      const sec = (q0, q1, b0, b1) => sector(C[0], C[1], q0, q1, b0 * D, b1 * D, Math.ceil(Math.abs(b1 - b0)) * 2);
+      hp(sec(r0, r1, a0, a1), h, mat); hp(sec(r0 - 2, r1 + 2, a0, a1), 0.5, M.roof, h);
+      if (glass) for (let y = 2.6; y < h - 1.5; y += 3.8) hp(sec(r0 - 3, r1 + 3, a0 + 0.2, a1 - 0.2), 1.6, M.glass, y);
+    };
+    const CLOc = [915, 1671.6], NORc = [832.2, -1057.3];
+    arcWing(CLOc, 1045, 1100, -119, -75, 22);                         // CLO
+    arcWing(CLOc, 1022, 1045, -117, -77, 4, M.wall2, false);          // terrace on the lawn side
+    hp(sector(CLOc[0], CLOc[1], 1055, 1090, -100 * D, -92 * D, 16), 3.2, M.wall2, 22.5);   // penthouse
+    arcWing(NORc, 1428, 1505, 54, 104.5, 17);                        // the bridge wing and CNMS, one building
+    for (let a = 56; a < 70; a += 2.4) { const t = a * D, r = 1452 + ((a / 2.4) % 2) * 26; add(ibox(H, NORc[0] + r * Math.cos(t), NORc[1] + r * Math.sin(t), 22, 16, 3, M.metal, a - 90, 17)); }   // CNMS air handlers
+    // the flat block between the two arcs, overlapping both so no ground shows between them
+    block([[668, 410], [1062, 410], [1066, 584], [870, 574], [672, 600]], 18, M.wall2);
     add(flat(F, [[440, 190], [520, 190], [520, 300], [440, 300]], M.paving, -0.03));
-  }
-  // CNMS: the four-storey laboratory along Argonne Drive, with its low wing on the road side
-  {
-    bldg(F, [622, 562], [776, 948], 44, 17, M.wall);
-    bldg(F, [700, 705], [828, 935], 30, 7, M.wall2, false);
-    for (let i = 0; i < 8; i++) { const t = 0.12 + i * 0.1; add(ibox(F, 622 + 154 * t + (i % 2) * 6, 562 + 386 * t, 16, 10, 2.6, M.metal, 68, 17.5)); }
+    labelAt.CLO = H.P(800, 610); labelAt.CNMS = H.P(1440, 300);
   }
   // the rest of the whole-site photo: laboratory south of the target building, Shull Wollan Center, utilities, linac support buildings
   {
@@ -291,30 +311,61 @@ export function buildSite(THREE) {
 
   // ── accelerator: front end → linac → accumulator ring → target ──
   const ldx = LIN1[0] - LIN0[0], ldz = LIN1[1] - LIN0[1], llen = Math.hypot(ldx, ldz), lry = Math.atan2(-ldz, ldx);
+  // Ring and transport lines, laid out after the SNS fly-through animation: a rounded-square ring (four 27.5 m straights
+  // and four 90° arcs, 248 m round) with its sides square to the linac; the HEBT turns 90° into the injection straight;
+  // the RTBT leaves the end of the opposite straight and bends about 35° onto the target axis (x = 0).
+  // Ring-local coordinates (a, b): a along the linac, b 90° to its right.
+  const e1 = [ldx / llen, ldz / llen], e2 = [-e1[1], e1[0]];
+  const RS = 27.5, RR = 22, RH = RS / 2 + RR, s2 = RS / 2;   // straight length, arc radius, half-width
+  const KB = 27, ZB = 188, TBEND = 12.5;                          // RTBT bend point (0, ZB), KB past the middle of the extraction straight
+  const RC = [-KB * e2[0] - RH * e1[0], ZB - KB * e2[1] - RH * e1[1]];
+  const RP = (a, b) => [RC[0] + a * e1[0] + b * e2[0], RC[1] + a * e1[1] + b * e2[1]];
+  const LP = ([a, b]) => RP(a, b);
+  const loc = ([x, z]) => [(x - RC[0]) * e1[0] + (z - RC[1]) * e1[1], (x - RC[0]) * e2[0] + (z - RC[1]) * e2[1]];
+  const bez = (A, Q, B, n) => Array.from({ length: n + 1 }, (_, i) => { const t = i / n, u = 1 - t; return [u * u * A[0] + 2 * t * u * Q[0] + t * t * B[0], u * u * A[1] + 2 * t * u * Q[1] + t * t * B[1]]; });
+  const line = (A, B, step) => { const n = Math.max(1, Math.ceil(Math.hypot(B[0] - A[0], B[1] - A[1]) / step)); return Array.from({ length: n + 1 }, (_, i) => [A[0] + (B[0] - A[0]) * i / n, A[1] + (B[1] - A[1]) * i / n]); };
+  // one lap in ring coordinates, from the bottom of the injection straight with the beam moving towards −b
+  const lap = [];
+  {
+    const seg = (a0, b0, a1, b1) => lap.push(...line([a0, b0], [a1, b1], 4).slice(0, -1));
+    const arc = (ca, cb, t0) => { for (let i = 0; i < 8; i++) { const t = (t0 + 90 * i / 8) * D; lap.push([ca + RR * Math.cos(t), cb + RR * Math.sin(t)]); } };
+    seg(-RH, s2, -RH, -s2); arc(-s2, -s2, 180); seg(-s2, -RH, s2, -RH); arc(s2, -s2, 270);
+    seg(RH, -s2, RH, s2); arc(s2, s2, 0); seg(s2, RH, -s2, RH); arc(-s2, s2, 90);
+  }
+  const iExt = lap.findIndex(([a, b]) => a > RH - 0.01 && b > s2 - 0.01);   // end of the extraction straight
+  const [aL, bL] = loc(LIN1), TH = Math.min(35, -RH - aL - 1);
+  const hebtXZ = [LIN1, ...bez(RP(-RH - TH, bL), RP(-RH, bL), RP(-RH, bL - TH), 14), ...line(RP(-RH, bL - TH), RP(-RH, s2), 6).slice(1)];
+  const rtbtXZ = [RP(RH, s2), ...bez(RP(RH, KB - TBEND), [0, ZB], [0, ZB - TBEND], 10), ...line([0, ZB - TBEND], [0, 0], 20).slice(1)];
+  const V = (y) => ([x, z]) => new THREE.Vector3(x, y, z);
+  const dedupe = (a) => a.filter((p, i) => i === 0 || p.distanceTo(a[i - 1]) > 0.5);
+  const ringPath = new THREE.CatmullRomCurve3(lap.map(LP).map(V(0)), true);
+  const hebtPath = new THREE.CatmullRomCurve3(dedupe(hebtXZ.map(V(0))), false, 'centripetal');
+  const rtbtPath = new THREE.CatmullRomCurve3(dedupe(rtbtXZ.filter(([, z]) => z > 40).map(V(0))), false, 'centripetal');
   {
     const mx = (LIN0[0] + LIN1[0]) / 2, mz = (LIN0[1] + LIN1[1]) / 2;
     add(box(llen, 4, 16, M.berm, mx, 2, mz, lry));                                                   // linac tunnel under its earth berm
     add(box(llen - 20, 10, 18, M.wall2, mx + gnx * 24, 5, mz + gnz * 24, lry), box(llen - 19, 0.5, 18.6, M.roof, mx + gnx * 24, 10.25, mz + gnz * 24, lry));   // klystron gallery
     add(box(46, 13, 34, M.wall, LIN0[0] - ldx / llen * 14 + gnx * 10, 6.5, LIN0[1] - ldz / llen * 14 + gnz * 10, lry));   // front-end building
-    const ringBerm = new THREE.Mesh(new THREE.TorusGeometry(RING.r, 11, 12, 64).rotateX(PI / 2), M.berm);
-    ringBerm.scale.y = 0.32; ringBerm.position.set(RING.x, 0.5, RING.z); add(ringBerm);
-    add(box(30, 9, 20, M.wall2, RING.x + 4, 4.5, RING.z - 2), box(16, 7, 14, M.wall, RING.x - 62, 3.5, RING.z + 30));
-    add(box(14, 3.4, 180, M.berm, 0, 1.7, 140));                                                     // ring-to-target line, under its berm
-    // HEBT: from the end of the linac, bending north into the ring
-    const hebt = new THREE.CatmullRomCurve3([LIN1, [140, 118], [105, 150], [85, 205], [73, 253]].map(([x, z]) => new THREE.Vector3(x, 1.5, z)));
-    add(new THREE.Mesh(new THREE.TubeGeometry(hebt, 40, 8, 6).scale(1, 0.3, 1), M.berm));
+    add(new THREE.Mesh(new THREE.TubeGeometry(ringPath, 120, 10, 6, true).scale(1, 0.32, 1).translate(0, 0.5, 0), M.berm));   // ring tunnel berm
+    add(box(40, 8, 40, M.wall2, RC[0], 4, RC[1], lry), box(41, 0.5, 41, M.roof, RC[0], 8.25, RC[1], lry));   // ring service building, inside the ring
+    { const [x, z] = RP(-RH - 27, -RH + 6); add(box(15, 6, 15, M.wall, x, 3, z, lry)); }
+    add(new THREE.Mesh(new THREE.TubeGeometry(hebtPath, 60, 8, 6).scale(1, 0.32, 1).translate(0, 0.5, 0), M.berm));      // HEBT berm
+    add(new THREE.Mesh(new THREE.TubeGeometry(rtbtPath, 60, 7, 6).scale(1, 0.32, 1).translate(0, 0.5, 0), M.berm));      // RTBT berm
+    add(box(44, 3.4, 10, M.berm, -22, 1.7, ZB - 34), box(10, 6, 24, M.wall, -46, 3, ZB - 34));        // extraction-dump spur and its building
     const wt = add(new THREE.Group()), [wx, wz] = W.P(510, 468); wt.position.set(wx, 0, wz);   // water tower
-    wt.add(new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.2, 38, 10).translate(0, 19, 0), M.wall), new THREE.Mesh(new THREE.SphereGeometry(8, 20, 14).translate(0, 42, 0).scale(1, 0.8, 1), M.wall));
+    for (const [lx, lz] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) wt.add(new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.8, 38, 6).translate(lx, 19, lz), M.wall));
+    wt.add(new THREE.Mesh(new THREE.SphereGeometry(8, 20, 14).translate(0, 42, 0).scale(1, 0.8, 1), M.wall));
   }
 
-  // proton path, drawn above the tunnels so it can be followed from the air
+  // proton path, drawn just above the tunnel berms so it can be followed from the air. The real beam stays at one
+  // elevation from the ion source to the target, so every point sits at the same height (a Catmull-Rom curve through
+  // points of equal y never leaves that plane).
   const pts = [];
-  const Y = 9;
+  const Y = 6;
   for (let i = 0; i <= 12; i++) pts.push(new THREE.Vector3(LIN0[0] + ldx * i / 12, Y, LIN0[1] + ldz * i / 12));
-  pts.push(new THREE.Vector3(140, Y, 118), new THREE.Vector3(105, Y, 150), new THREE.Vector3(85, Y, 205));
-  for (let a = 35; a <= 540; a += 15) pts.push(new THREE.Vector3(RING.x + RING.r * Math.cos(a * D), Y, RING.z + RING.r * Math.sin(a * D)));
-  for (let z = 200; z >= 0; z -= 25) pts.push(new THREE.Vector3(0, z > 80 ? Y : Math.max(2, Y * z / 80), z));
-  const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+  // HEBT, one full lap and the turn down the extraction straight, then the RTBT to the target
+  for (const p of [...hebtXZ, ...lap.map(LP), ...lap.slice(0, iExt + 1).map(LP), ...rtbtXZ]) pts.push(V(Y)(p));
+  const curve = new THREE.CatmullRomCurve3(dedupe(pts), false, 'centripetal');
   const beamMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.75, 0.2), transparent: true, opacity: 0.85, fog: false });
   add(new THREE.Mesh(new THREE.TubeGeometry(curve, 500, 1.1, 6), beamMat));
   const bunchMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.2, 1), fog: false });
@@ -333,10 +384,10 @@ export function buildSite(THREE) {
   const labels = [
     { text: 'Target building', at: [-20, 30, 20] },
     { text: 'BL-6 · EQ-SANS', at: [b6.x * 25, 24, b6.z * 25], hot: true },
-    { text: 'Central Laboratory & Office', at: at(F, 450, 400, 28) },
-    { text: 'CNMS', at: at(F, 700, 760, 22) },
+    { text: 'Central Laboratory & Office', at: [labelAt.CLO[0], 28, labelAt.CLO[1]] },
+    { text: 'CNMS', at: [labelAt.CNMS[0], 30, labelAt.CNMS[1]] },
     { text: 'Second Target Station (under construction)', at: at(F, 1165, 685, 12) },
-    { text: 'Accumulator ring', at: [RING.x, 14, RING.z] },
+    { text: 'Accumulator ring', at: [RC[0], 14, RC[1]] },
     { text: 'Linac', at: [(LIN0[0] + LIN1[0]) / 2, 16, (LIN0[1] + LIN1[1]) / 2] },
     { text: 'Front end (ion source)', at: [LIN0[0], 18, LIN0[1]] },
   ];

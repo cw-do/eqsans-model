@@ -8,7 +8,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { buildSite, BL6_ANGLE } from './site.js?v=5';
+import { buildSite, BL6_ANGLE } from './site.js?v=15';
 
 const $ = (id) => document.getElementById(id);
 const PI = Math.PI, TAU = PI * 2;
@@ -160,10 +160,21 @@ const anchor = (key, parent, x = 0, y = 0, z = 0) => { const a = new THREE.Objec
 {
   const g = comp('moderator');
   const m = onPath(group(g), -0.06);
-  m.add(box(0.12, 0.14, 0.1, MAT.moderator));                        // 100 × 140 mm viewed face
-  m.add(box(0.2, 0.2, 0.16, std(0xdfe6ea, { transparent: true, opacity: 0.25, depthWrite: false })));
-  m.add(box(0.9, 0.12, 0.42, MAT.steel, -0.25, -0.2, 0));            // mercury target vessel, just below
-  m.add(cylZ(0.05, 2.6, MAT.proton, -0.25, -0.2, 1.5));              // proton beam
+  // Local frame: x = along BL-6, z = against the protons (they travel −z), so +z is upstream.
+  // After the SNS animation: a cylindrical mercury vessel whose nose sits under the top moderators, two moderators
+  // above it and two below, all inside a translucent reflector.
+  m.add(box(0.12, 0.14, 0.1, MAT.moderator));                        // top-downstream coupled H2, the one BL-6 views (100 × 140 mm face)
+  m.add(cylY(0.075, 0.14, MAT.moderator, -0.03, 0, 0));
+  const modB = std(0x3a5cff, { emissive: 0x2440ff, emissiveIntensity: 0.6 });
+  m.add(cylY(0.075, 0.14, modB, -0.03, 0, 0.2));                     // top-upstream decoupled H2
+  m.add(cylY(0.075, 0.14, modB, -0.03, -0.44, 0.05));                // bottom moderators
+  m.add(box(0.13, 0.12, 0.13, std(0x7fd7ff, { emissive: 0x3aa0d0, emissiveIntensity: 0.4 }), -0.03, -0.44, 0.24));
+  m.add(cylY(0.42, 0.95, std(0xdfe6ea, { transparent: true, opacity: 0.12, depthWrite: false }), -0.03, -0.22, 0.1));   // reflector
+  const hg = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 1.5, 6, 20).rotateX(PI / 2).scale(1.25, 0.6, 1), MAT.steel);
+  hg.position.set(-0.03, -0.22, 0.8); m.add(hg);                      // mercury target vessel, nose under the moderators
+  m.add(cylZ(0.24, 0.06, MAT.steel, -0.03, -0.22, 1.1), cylZ(0.24, 0.06, MAT.steel, -0.03, -0.22, 1.5));   // flanges
+  m.add(box(0.55, 0.45, 0.6, std(0x6d7176, { metalness: 0.7, roughness: 0.4 }), -0.03, -0.22, 2.0));     // target carriage / manifold
+  m.add(cylZ(0.04, 5.9, MAT.proton, -0.03, -0.22, 3.0));             // proton beam, ending in the nose
   anchor('moderator', m, 0, 0.25, 0);
 
   const mono = comp('monolith');
@@ -1209,7 +1220,6 @@ function updateDive(dt) {
     setBeam(true, false); setTof(true); }                         // arrive with the beam running, shells in X-ray, time–distance plot open
 }
 $('btn-dive').onclick = startDive;
-$('btn-skip').onclick = showInstrument;
 $('btn-site').onclick = showSite;
 if (location.hash === '#eqsans') showInstrument(); else showSite();
 
