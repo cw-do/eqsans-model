@@ -8,7 +8,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { buildSite, BL6_ANGLE } from './site.js?v=4';
+import { buildSite, BL6_ANGLE } from './site.js?v=5';
 
 const $ = (id) => document.getElementById(id);
 const PI = Math.PI, TAU = PI * 2;
@@ -553,15 +553,21 @@ pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
 pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1));
 pGeo.setAttribute('aAlpha', new THREE.BufferAttribute(pAlpha, 1));
 const pMat = new THREE.ShaderMaterial({
-  uniforms: { uScale: { value: 800 } },
-  vertexShader: `attribute float aSize; attribute float aAlpha; attribute vec3 color; uniform float uScale; varying vec3 vC; varying float vA;
-    void main(){ vC=color; vA=aAlpha; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_Position=projectionMatrix*mv; gl_PointSize=clamp(aSize*uScale/-mv.z,4.0,34.0); }`,
-  fragmentShader: `varying vec3 vC; varying float vA;
-    void main(){ float d=length(gl_PointCoord-0.5)*2.0; float a=pow(max(0.0,1.0-d),1.6); gl_FragColor=vec4(vC*a*vA*1.9+vec3(a*a*a*vA*0.18),1.0); }`,
+  uniforms: { uScale: { value: 800 }, uMin: { value: 5 } },
+  // Seen from far away a bead is smaller than a pixel, so its size is clamped to uMin (in device pixels). A soft glow alone
+  // fades to nothing at that size, so the bead also keeps a solid core whose share grows as it gets smaller.
+  vertexShader: `attribute float aSize; attribute float aAlpha; attribute vec3 color; uniform float uScale; uniform float uMin; varying vec3 vC; varying float vA; varying float vK;
+    void main(){ vC=color; vA=aAlpha; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_Position=projectionMatrix*mv;
+      float s=aSize*uScale/-mv.z; gl_PointSize=clamp(s,uMin,34.0); vK=1.0-smoothstep(uMin,uMin*3.0,s); }`,
+  fragmentShader: `varying vec3 vC; varying float vA; varying float vK;
+    void main(){ float d=length(gl_PointCoord-0.5)*2.0; float glow=pow(max(0.0,1.0-d),1.6); float core=1.0-smoothstep(0.45,0.9,d);
+      float a=max(glow,core*mix(0.35,0.95,vK)); gl_FragColor=vec4(vC*a*vA*1.9+vec3(a*a*a*vA*0.18),1.0); }`,
   blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
 });
 const points = new THREE.Points(pGeo, pMat);
-points.frustumCulled = false; points.visible = false;
+// Draw the beads after every translucent shell. Three sorts transparent objects by the distance of their centres, and the
+// beads are one object centred on the moderator, so from some angles the X-ray shells were drawn over them and hid them.
+points.frustumCulled = false; points.visible = false; points.renderOrder = 10;
 root.add(points);
 
 const tmpC = new THREE.Color();
@@ -1006,6 +1012,7 @@ function resize() {
   renderer.setSize(w, h, false); composer.setSize(w, h);
   camera.aspect = w / h; camera.fov = w < h ? 55 : 38; camera.updateProjectionMatrix();
   pMat.uniforms.uScale.value = h * renderer.getPixelRatio() / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+  pMat.uniforms.uMin.value = 5 * renderer.getPixelRatio();
 }
 window.addEventListener('resize', resize); resize();
 

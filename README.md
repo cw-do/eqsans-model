@@ -6,7 +6,7 @@ An interactive three.js model of the **EQ-SANS** small-angle neutron scattering 
 
 ## What it shows
 
-- **SNS site**: the page opens on a schematic aerial model of the Spallation Neutron Source (linac, accumulator ring, target building, the curved office building and CNMS). *Take me to EQ-SANS* flies in through the roof of the target building to beamline 6. Add `#eqsans` to the URL to open the instrument directly.
+- **SNS site**: the page opens on a schematic aerial model of the Spallation Neutron Source (linac, accumulator ring, target building, the bridge to the curved office building, CNMS, and the Second Target Station under construction). *Take me to EQ-SANS* flies in through the roof of the target building to beamline 6. Add `#eqsans` to the URL to open the instrument directly.
 - **The beamline**, from the moderator to the concrete plug behind the detector tank: curved bender, three bandwidth choppers, slit wheels, guard slits, sample aperture, banjo-cell sample, sapphire window, and the 1 m × 1 m detector inside the vacuum tank.
 - **Explode**: takes the instrument apart.
 - **Neutron beam**: time-of-flight pulses as glowing beads coloured by wavelength. The choppers and apertures absorb what they should, the sample scatters with a sphere form factor, and the detector builds up a 2D pattern and I(Q).
@@ -17,7 +17,7 @@ An interactive three.js model of the **EQ-SANS** small-angle neutron scattering 
 
 ## Accuracy
 
-Component positions along the beam follow Figure 1 of Zhao, Gao & Liu, *J. Appl. Cryst.* **43** (2010) 1068–1077. Other dimensions (beam height, tank diameter, enclosure, mezzanine) are estimated from photographs. The site model is built by eye from aerial photographs: building footprints, distances and the angle of beamline 6 are approximate, and the proton path is drawn above ground so it can be followed. Time is slowed 180×, the scattered fraction is exaggerated so the beads are visible, and the assignment of band edges to individual choppers is a simplification. This is a teaching model, not an engineering drawing.
+Component positions along the beam follow Figure 1 of Zhao, Gao & Liu, *J. Appl. Cryst.* **43** (2010) 1068–1077. Other dimensions (beam height, tank diameter, enclosure, mezzanine) are estimated from photographs. The site model is traced from 2026 aerial imagery: a close-up with a 100 ft scale bar (0.30 m/px) for the target building, the bridge, the Central Laboratory & Office building, CNMS and the Second Target Station construction site, and a whole-site view (0.70 m/px, fitted to the close-up on seven common points, residual under 13 m) for everything else. Building heights are estimated from oblique views, beamline 6 is drawn at 90° to the proton beam, and the proton path is drawn above ground so it can be followed. Time is slowed 180×, the scattered fraction is exaggerated so the beads are visible, and the assignment of band edges to individual choppers is a simplification. This is a teaching model, not an engineering drawing.
 
 ## Run locally
 
