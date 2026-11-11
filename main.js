@@ -1185,6 +1185,7 @@ function startDive() {
   if (mode !== 'site') return;
   mode = 'dive'; controls.enabled = false; controls.autoRotate = false;
   dive = { t: 0, p0: camera.position.clone(), t0: controls.target.clone() };
+  controls.minDistance = 0.12; controls.maxDistance = 5000;        // OrbitControls clamps the distance even while disabled
   $('landing').classList.add('gone');
 }
 const dA = new THREE.Vector3(), dB = new THREE.Vector3(), sstep = THREE.MathUtils.smoothstep;
@@ -1196,8 +1197,8 @@ function updateDive(dt) {
   site.setReveal(sstep(u, 0.2, 0.4));                             // roof and walls of the target building go first
   applyEnv(1 - sstep(u, 0.36, 0.7));                              // daylight → hall
   site.setFade(1 - sstep(u, 0.5, 0.78));                          // then the other beamlines and the rest of the site
-  if (uiSite && u > 0.8) setUi(false);
-  if (u >= 1) { site.group.visible = false; applyEnv(0); dive = null; mode = 'inst'; controls.enabled = true; }
+  if (uiSite && u > 0.8) { setUi(false); controls.maxDistance = 5000; }
+  if (u >= 1) { site.group.visible = false; applyEnv(0); dive = null; mode = 'inst'; controls.enabled = true; controls.maxDistance = 90; }
 }
 $('btn-dive').onclick = startDive;
 $('btn-skip').onclick = showInstrument;
