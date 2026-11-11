@@ -8,6 +8,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { buildSite, BL6_ANGLE } from './site.js?v=2';
 
 const $ = (id) => document.getElementById(id);
 const PI = Math.PI, TAU = PI * 2;
@@ -83,8 +84,9 @@ composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
 // floor
+let hallFloor;
 {
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-PI / 2),
+  const floor = hallFloor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-PI / 2),
     new THREE.MeshStandardMaterial({ color: 0x3d4249, roughness: 0.9, metalness: 0 }));
   floor.position.set(12, 0, 0);
   floor.receiveShadow = true;
@@ -982,9 +984,12 @@ $('speed').oninput = (e) => { simSpeed = +e.target.value; $('speed-out').textCon
 // click a part in 3D
 const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
 let downAt = null;
-canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; fly = null; stopTour(); });
+canvas.addEventListener('pointerdown', (e) => {
+  if (mode !== 'inst') { controls.autoRotate = false; downAt = null; return; }
+  downAt = [e.clientX, e.clientY]; fly = null; stopTour();
+});
 canvas.addEventListener('pointerup', (e) => {
-  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return;
+  if (mode !== 'inst' || !downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return;
   mouse.set(e.clientX / window.innerWidth * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
   ray.setFromCamera(mouse, camera);
   for (const h of ray.intersectObject(root, true)) {
@@ -1059,6 +1064,8 @@ function updateTour(realDt) {
 const clock = new THREE.Clock(), v3 = new THREE.Vector3();
 let texTimer = 0, plotTimer = 0;
 function step(realDt) {
+  if (dive) updateDive(realDt);
+  if (mode !== 'inst') site.update(realDt);
   if (tour) updateTour(realDt);
   const dt = realDt * (tour ? tour.speed : simSpeed);
 
@@ -1089,7 +1096,7 @@ function step(realDt) {
 
   if (tofOn && beamOn) drawTof();
 
-  if (labelsOn) layoutLabels();
+  if (site.group.visible) layoutSiteLabels(); else if (labelsOn) layoutLabels();
 }
 const shown = [], rows = [];
 function layoutLabels() {
@@ -1116,6 +1123,78 @@ function layoutLabels() {
     l.el.style.transform = `translate(-50%, -100%) translate(${l.x.toFixed(1)}px, ${(l.y - lift).toFixed(1)}px)`;
   }
 }
+// ───────────────────────── SNS site: aerial landing view and the dive into beamline 6 ─────────────────────────
+// The site model is placed so that its beamline-6 direction coincides with the instrument's +x axis,
+// which makes the zoom from the air end on the real model without a cut in position.
+const site = buildSite(THREE);
+site.group.rotation.y = BL6_ANGLE - PI / 2;
+scene.add(site.group); site.group.updateMatrixWorld(true);
+const SITE_POS = site.group.localToWorld(new THREE.Vector3(120, 230, -640)), SITE_TGT = site.group.localToWorld(new THREE.Vector3(10, 0, -40));
+const DIVE_POS = new THREE.Vector3(13, 150, 70), DIVE_TGT = new THREE.Vector3(13, 0, 0), DIVE_T = 8;
+const SKY = 0xa8c6de, DARK = 0x0a0e15;
+let mode = 'inst', dive = null;
+const siteLabelEls = site.labels.map((l) => {
+  const el = document.createElement('div'); el.className = 'lbl site-lbl' + (l.hot ? ' on' : ''); el.textContent = l.text;
+  if (l.hot) el.onclick = () => startDive();
+  $('sitelabels').append(el);
+  return { el, pos: site.group.localToWorld(new THREE.Vector3(...l.at)) };
+});
+function layoutSiteLabels() {
+  const w = window.innerWidth, h = window.innerHeight;
+  for (const l of siteLabelEls) {
+    v3.copy(l.pos).project(camera);
+    const vis = v3.z < 1 && Math.abs(v3.x) < 1 && Math.abs(v3.y) < 1 && !(dive && dive.t / DIVE_T > 0.3);
+    l.el.style.opacity = vis ? 1 : 0;
+    if (vis) l.el.style.transform = `translate(-50%, -100%) translate(${((v3.x + 1) / 2 * w).toFixed(1)}px, ${((1 - v3.y) / 2 * h - 14).toFixed(1)}px)`;
+  }
+}
+function setEnv(siteOn) {
+  scene.background.setHex(siteOn ? SKY : DARK); scene.fog.color.setHex(siteOn ? SKY : DARK);
+  scene.fog.near = siteOn ? 900 : 45; scene.fog.far = siteOn ? 4200 : 120;
+  camera.near = siteOn ? 2 : 0.05; camera.far = siteOn ? 7000 : 400; camera.updateProjectionMatrix();
+  controls.minDistance = siteOn ? 80 : 0.12; controls.maxDistance = siteOn ? 1500 : 90;
+  controls.maxPolarAngle = siteOn ? PI * 0.46 : PI * 0.495;
+  site.group.visible = siteOn; hallFloor.visible = !siteOn;
+  bloom.strength = siteOn ? 0.25 : 0.5; renderer.toneMappingExposure = siteOn ? 0.72 : 1.1;
+  document.body.classList.toggle('site', siteOn);
+}
+function showSite() {
+  stopTour(); if (beamOn) setBeam(false); if (exploded) { exploded = false; exAmt = 0; applyExplode(); $('btn-explode').classList.remove('on'); $('btn-explode').textContent = 'Explode'; }
+  fly = null; dive = null; mode = 'site';
+  setEnv(true); site.setReveal(0);
+  camera.position.copy(SITE_POS); controls.target.copy(SITE_TGT);
+  controls.enabled = true; controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
+  $('landing').classList.remove('gone');
+}
+function showInstrument() {
+  dive = null; mode = 'inst'; setEnv(false);
+  camera.position.copy(HOME_POS); controls.target.copy(HOME_TGT);
+  controls.enabled = true; controls.autoRotate = false;
+}
+function startDive() {
+  if (mode !== 'site') return;
+  mode = 'dive'; controls.enabled = false; controls.autoRotate = false;
+  dive = { t: 0, p0: camera.position.clone(), t0: controls.target.clone(), swapped: false };
+  $('landing').classList.add('gone');
+}
+const dA = new THREE.Vector3(), dB = new THREE.Vector3();
+function updateDive(dt) {
+  dive.t += dt;
+  const u = Math.min(1, dive.t / DIVE_T), e = ease(u);
+  dA.lerpVectors(dive.p0, DIVE_POS, e); dB.lerpVectors(DIVE_POS, HOME_POS, e); camera.position.lerpVectors(dA, dB, e);
+  dA.lerpVectors(dive.t0, DIVE_TGT, e); dB.lerpVectors(DIVE_TGT, HOME_TGT, e); controls.target.lerpVectors(dA, dB, e);
+  if (!dive.swapped) {
+    site.setReveal(THREE.MathUtils.smoothstep(u, 0.3, 0.52));
+    if (u > 0.585) $('fade').classList.add('on');                  // a short dip hides the change of scale and lighting
+    if (u > 0.64) { dive.swapped = true; setEnv(false); $('fade').classList.remove('on'); }
+  }
+  if (u >= 1) { dive = null; mode = 'inst'; controls.enabled = true; }
+}
+$('btn-dive').onclick = startDive;
+$('btn-skip').onclick = showInstrument;
+$('btn-site').onclick = showSite;
+if (location.hash === '#eqsans') showInstrument(); else showSite();
+
 function frame() {
   step(Math.min(clock.getDelta(), 0.05));
   composer.render();
@@ -1126,4 +1205,4 @@ drawDetector();
 frame();
 $('loader').classList.add('gone');
 
-window.__eqsans = { startTour, advance: (sec) => { for (let t = 0; t < sec; t += 0.04) step(0.04); }, select, setHidden, setHud, setTof, setParts, setExplode, setBeam, setXray, flyTo, camera, controls, THREE, get total() { return total; } };
+window.__eqsans = { startTour, advance: (sec) => { for (let t = 0; t < sec; t += 0.04) step(0.04); }, select, startDive, showSite, showInstrument, get mode() { return mode; }, setHidden, setHud, setTof, setParts, setExplode, setBeam, setXray, flyTo, camera, controls, THREE, get total() { return total; } };

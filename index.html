@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="eqsans.css?v=25" />
+    <link rel="stylesheet" href="eqsans.css?v=28" />
     <script type="importmap">
       {
         "imports": {
@@ -21,10 +21,13 @@
   <body>
     <canvas id="scene" aria-label="3D model of the EQ-SANS instrument"></canvas>
     <div id="labels"></div>
+    <div id="sitelabels"></div>
+    <div id="fade"></div>
 
     <header class="top">
       <a class="back" href="https://github.com/cw-do/eqsans-model">GitHub</a>
       <div class="brand">EQ-SANS <span>Extended Q-range SANS · Beamline 6 · SNS</span></div>
+      <button id="btn-site" class="back" type="button">SNS site</button>
     </header>
 
     <aside id="parts">
@@ -84,6 +87,17 @@
       <p class="hint">Each line is one wavelength leaving the moderator; the slope is its speed. White bars are the choppers while closed. The choppers are phased from the minimum wavelength so the band (dashed edges) just fills one 16.7 ms frame at the detector.</p>
     </section>
 
+    <section id="landing">
+      <p class="loc">Oak Ridge National Laboratory</p>
+      <h1>Spallation Neutron Source</h1>
+      <p>Protons from the linac are stacked in the accumulator ring and fired at a mercury target 60 times a second. The neutrons that come out feed the beamlines around the target. EQ-SANS is beamline 6.</p>
+      <div class="landing-actions">
+        <button id="btn-dive" type="button">Take me to EQ-SANS →</button>
+        <button id="btn-skip" type="button">Skip</button>
+      </div>
+      <small>Schematic site model built from aerial photographs. Sizes and positions are approximate.</small>
+    </section>
+
     <p id="caption" hidden></p>
 
     <section id="hide-menu" hidden>
@@ -105,6 +119,6 @@
     </nav>
 
     <div id="loader"><div class="ring"></div><p>Assembling the beamline…</p></div>
-    <script type="module" src="main.js?v=25"></script>
+    <script type="module" src="main.js?v=28"></script>
   </body>
 </html>

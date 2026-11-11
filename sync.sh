@@ -3,7 +3,7 @@
 set -euo pipefail
 SRC="${1:-$HOME/project_ai/services/study/frontend/science}"
 cd "$(dirname "$0")"
-cp "$SRC/eqsans/main.js" "$SRC/eqsans/eqsans.css" .
+cp "$SRC/eqsans/main.js" "$SRC/eqsans/site.js" "$SRC/eqsans/eqsans.css" .
 mkdir -p vendor && rm -rf vendor/three && cp -r "$SRC/vendor/three" vendor/three
 sed -e 's#/static/science/eqsans/##g' \
     -e 's#/static/science/vendor/#./vendor/#g' \
