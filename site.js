@@ -224,7 +224,7 @@ export function buildSite(THREE) {
     add(ibox(W, 880, 567, 110, 45, 10, M.wall, -3), ibox(W, 876, 560, 55, 24, 15, M.wall, -3), ibox(W, 880, 567, 111, 46, 0.4, M.roof, -3, 10));
     add(ibox(W, 755, 495, 30, 30, 10, M.wall2, -20), ibox(W, 800, 483, 62, 18, 7, M.wall2, -18));
     add(ibox(W, 1412, 312, 72, 38, 10, M.wall, -15), ibox(W, 1395, 320, 30, 30, 13, M.wall2, -15));
-    add(ibox(W, 738, 405, 40, 26, 8, M.wall2, 40), ibox(W, 678, 455, 30, 60, 6, M.wall2, 70), ibox(W, 560, 330, 40, 28, 7, M.wall2, 30), ibox(W, 705, 295, 18, 18, 5, M.wall2));
+    add(ibox(W, 738, 405, 40, 26, 8, M.wall2, 40), ibox(W, 705, 295, 18, 18, 5, M.wall2));
     add(ibox(W, 680, 610, 70, 55, 10, M.wall2, -25));                                         // central utilities
     add(ibox(W, 715, 670, 90, 45, 7, M.metal, -25));                                          // cooling towers
     for (let i = 0; i < 4; i++) { const [x, z] = W.P(680 + i * 22, 686 - i * 10); const f = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 1.2, 20), M.wall); f.position.set(x, 7.6, z); add(f); }
@@ -233,14 +233,11 @@ export function buildSite(THREE) {
     add(ibox(W, 598, 657, 105, 80, 12, M.roof, -25), ibox(W, 485, 705, 140, 60, 9, M.wall2, -25));   // cryogenics and linac support buildings
   }
 
-  // ── Second Target Station: construction site, 2026 ──
+  // ── Second Target Station: construction site, 2026 — kept to two shades of dirt and the machines ──
   {
     add(flat(W, [[850, 165], [905, 128], [1010, 126], [1075, 158], [1118, 250], [1122, 375], [1040, 386], [935, 350], [852, 322]], M.dirt, -0.02));
     add(flat(W, [[1085, 0], [1636, 0], [1636, 215], [1440, 225], [1330, 150], [1215, 110], [1130, 140], [1085, 90]], M.dirt, -0.02));
-    add(flat(W, [[1300, 0], [1450, 0], [1440, 110], [1310, 100]], M.gravel, 0.0));
     add(flat(F, [[945, 490], [1385, 490], [1385, 880], [955, 880]], M.dirt2, 0.0));              // the excavated footprint
-    add(flat(F, [[955, 465], [1215, 465], [1215, 505], [955, 505]], M.dirt3, 0.02), flat(F, [[930, 840], [1020, 840], [1020, 930], [930, 930]], M.dirt3, 0.02));
-    add(ibar(F, [952, 500], [962, 750], 12, 0.2, std(0x6e3a22, { roughness: 1 }), 0.01), ibar(F, [1380, 495], [1385, 870], 10, 0.2, std(0x6e3a22, { roughness: 1 }), 0.01));
     const digger = (Fr, px, py, phi) => {
       const g = new THREE.Group(), [x, z] = Fr.P(px, py);
       g.add(box(3.2, 1.2, 4.6, M.dark || std(0x333333), 0, 0.6, 0), box(3, 1.8, 3.4, M.yellow, 0, 2.1, 0), box(1.2, 1, 7, M.yellow, 0, 3.8, -4.2));
@@ -248,9 +245,6 @@ export function buildSite(THREE) {
       g.position.set(x, 0, z); g.rotation.y = ry(Fr, phi); add(g);
     };
     digger(F, 1000, 525, 20); digger(F, 1170, 525, 140); digger(F, 1070, 690, 70); digger(W, 950, 205, 10); digger(W, 895, 175, 200); digger(W, 985, 285, 120);
-    const truck = (Fr, px, py, phi) => { add(ibox(Fr, px, py, 9 / Fr.s, 3 / Fr.s, 3, M.yellow, phi), ibox(Fr, px + 0.1, py, 2.5 / Fr.s, 3 / Fr.s, 3.4, M.wall, phi)); };
-    for (let i = 0; i < 4; i++) truck(W, 1012 + i * 12, 138 + i * 5, 20);
-    for (let i = 0; i < 5; i++) truck(F, 1125 + i * 26, 960 - i * 10, -15);
     const [rx, rz] = F.P(1225, 775);                                                         // drilling rig
     add(box(4, 2, 6, M.yellow, rx, 1, rz), box(0.9, 26, 0.9, M.metal, rx, 14, rz - 2.5));
   }
@@ -262,10 +256,8 @@ export function buildSite(THREE) {
     const LOTS = [
       [F, [[725, 250], [870, 250], [870, 560], [725, 560]], 90],
       [W, [[990, 600], [1110, 600], [1150, 700], [1150, 760], [1010, 760], [975, 680]], -62],
-      [W, [[1215, 240], [1350, 250], [1365, 330], [1300, 410], [1220, 420]], -80],
-      [W, [[1270, 380], [1370, 380], [1360, 470], [1270, 470]], 0],
+      [W, [[1215, 245], [1345, 255], [1355, 325], [1295, 392], [1225, 402]], -80],
       [W, [[1450, 265], [1636, 280], [1636, 330], [1450, 320]], 5],
-      [W, [[1080, 770], [1290, 760], [1300, 800], [1090, 810]], -3],
       [W, [[760, 492], [828, 500], [840, 560], [770, 570]], -65],
       [W, [[715, 600], [800, 590], [840, 650], [760, 662]], -30],
     ];
@@ -281,7 +273,7 @@ export function buildSite(THREE) {
       const a0 = Math.min(...along), a1 = Math.max(...along), b0 = Math.min(...across), b1 = Math.max(...across);
       for (let b = b0 + 4; b < b1 - 2; b += 17) for (const db of [0, 5.4]) for (let a = a0 + 2; a < a1 - 2 && n < N; a += 2.8) {
         const x = a * ux + (b + db) * nx, z = a * uz + (b + db) * nz;
-        if (!inside(pts, x, z) || rnd() < 0.25) continue;
+        if (!inside(pts, x, z) || rnd() < 0.55) continue;
         v.set(x, 0.05, z);
         cars.setMatrixAt(n, m4.compose(v, q.setFromEuler(e.set(0, -(psi + PI / 2), 0)), s));
         cars.setColorAt(n, c.setHex(paint[Math.floor(rnd() * paint.length)])); n++;
@@ -305,8 +297,9 @@ export function buildSite(THREE) {
     road(W, [[760, 600], [700, 640], [560, 700], [470, 760]], 7);                                         // Jefferson Drive
     road(W, [[735, 265], [690, 245], [600, 245], [545, 280], [500, 340], [440, 430], [380, 520], [330, 580], [300, 640], [250, 700]], 7);
     road(W, [[1137, 430], [1210, 430], [1290, 420], [1370, 350], [1450, 335], [1560, 345], [1636, 380]], 8);   // Nano Center Drive
-    road(W, [[1150, 230], [1215, 235], [1330, 235], [1370, 300]], 7);
+    road(W, [[1150, 230], [1215, 235], [1330, 235], [1370, 300], [1370, 350]], 7);   // joins Nano Center Drive
     road(F, [[870, 420], [1300, 410], [1420, 330]], 7);                                                    // service road behind the target building
+    road(F, [[1420, 330], [1638, 403]], 7);                                                                // ...and on to Argonne Drive
   }
 
   // ── accelerator: front end → linac → accumulator ring → target ──
@@ -348,10 +341,9 @@ export function buildSite(THREE) {
     add(box(46, 13, 34, M.wall, LIN0[0] - ldx / llen * 14 + gnx * 10, 6.5, LIN0[1] - ldz / llen * 14 + gnz * 10, lry));   // front-end building
     add(new THREE.Mesh(new THREE.TubeGeometry(ringPath, 120, 10, 6, true).scale(1, 0.32, 1).translate(0, 0.5, 0), M.berm));   // ring tunnel berm
     add(box(40, 8, 40, M.wall2, RC[0], 4, RC[1], lry), box(41, 0.5, 41, M.roof, RC[0], 8.25, RC[1], lry));   // ring service building, inside the ring
-    { const [x, z] = RP(-RH - 27, -RH + 6); add(box(15, 6, 15, M.wall, x, 3, z, lry)); }
     add(new THREE.Mesh(new THREE.TubeGeometry(hebtPath, 60, 8, 6).scale(1, 0.32, 1).translate(0, 0.5, 0), M.berm));      // HEBT berm
     add(new THREE.Mesh(new THREE.TubeGeometry(rtbtPath, 60, 7, 6).scale(1, 0.32, 1).translate(0, 0.5, 0), M.berm));      // RTBT berm
-    add(box(44, 3.4, 10, M.berm, -22, 1.7, ZB - 34), box(10, 6, 24, M.wall, -46, 3, ZB - 34));        // extraction-dump spur and its building
+    add(box(44, 3.4, 10, M.berm, -22, 1.7, ZB - 34));                                                 // extraction-dump spur
     const wt = add(new THREE.Group()), [wx, wz] = W.P(510, 468); wt.position.set(wx, 0, wz);   // water tower
     for (const [lx, lz] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) wt.add(new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.8, 38, 6).translate(lx, 19, lz), M.wall));
     wt.add(new THREE.Mesh(new THREE.SphereGeometry(8, 20, 14).translate(0, 42, 0).scale(1, 0.8, 1), M.wall));
