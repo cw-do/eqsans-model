@@ -8,7 +8,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { buildSite, BL6_ANGLE } from './site.js?v=2';
+import { buildSite, BL6_ANGLE } from './site.js?v=4';
 
 const $ = (id) => document.getElementById(id);
 const PI = Math.PI, TAU = PI * 2;
@@ -1096,7 +1096,7 @@ function step(realDt) {
 
   if (tofOn && beamOn) drawTof();
 
-  if (site.group.visible) layoutSiteLabels(); else if (labelsOn) layoutLabels();
+  if (uiSite) layoutSiteLabels(); else if (labelsOn) layoutLabels();
 }
 const shown = [], rows = [];
 function layoutLabels() {
@@ -1130,7 +1130,7 @@ const site = buildSite(THREE);
 site.group.rotation.y = BL6_ANGLE - PI / 2;
 scene.add(site.group); site.group.updateMatrixWorld(true);
 const SITE_POS = site.group.localToWorld(new THREE.Vector3(120, 230, -640)), SITE_TGT = site.group.localToWorld(new THREE.Vector3(10, 0, -40));
-const DIVE_POS = new THREE.Vector3(13, 150, 70), DIVE_TGT = new THREE.Vector3(13, 0, 0), DIVE_T = 8;
+const DIVE_POS = new THREE.Vector3(13, 150, 70), DIVE_TGT = new THREE.Vector3(13, 0, 0), DIVE_T = 9;
 const SKY = 0xa8c6de, DARK = 0x0a0e15;
 let mode = 'inst', dive = null;
 const siteLabelEls = site.labels.map((l) => {
@@ -1148,47 +1148,56 @@ function layoutSiteLabels() {
     if (vis) l.el.style.transform = `translate(-50%, -100%) translate(${((v3.x + 1) / 2 * w).toFixed(1)}px, ${((1 - v3.y) / 2 * h - 14).toFixed(1)}px)`;
   }
 }
-function setEnv(siteOn) {
-  scene.background.setHex(siteOn ? SKY : DARK); scene.fog.color.setHex(siteOn ? SKY : DARK);
-  scene.fog.near = siteOn ? 900 : 45; scene.fog.far = siteOn ? 4200 : 120;
-  camera.near = siteOn ? 2 : 0.05; camera.far = siteOn ? 7000 : 400; camera.updateProjectionMatrix();
+// k = 1: outdoor daylight and site scale; k = 0: the dark instrument hall. Everything in between is blended,
+// so the dive needs no cut: the sky darkens, the fog closes in and the site dissolves around the instrument.
+const cSky = new THREE.Color(SKY), cDark = new THREE.Color(DARK);
+const mixExp = (a, b, k) => b * Math.pow(a / b, k);                 // geometric blend for quantities spanning decades
+hallFloor.material.transparent = true;
+function applyEnv(k) {
+  scene.background.lerpColors(cDark, cSky, k); scene.fog.color.copy(scene.background);
+  const d = camera.position.distanceTo(controls.target);              // never let the fog close in front of what the camera looks at
+  scene.fog.near = Math.max(mixExp(900, 45, k), d * 1.35); scene.fog.far = Math.max(mixExp(4200, 120, k), d * 3.6);
+  camera.near = mixExp(2, 0.05, k); camera.far = mixExp(7000, 400, k); camera.updateProjectionMatrix();
+  renderer.toneMappingExposure = 1.1 + (0.72 - 1.1) * k; bloom.strength = 0.5 + (0.25 - 0.5) * k;
+  hallFloor.visible = k < 0.999; hallFloor.material.opacity = 1 - k; hallFloor.material.depthWrite = k < 0.02;
+}
+let uiSite = false;
+function setUi(siteOn) {
+  uiSite = siteOn;
   controls.minDistance = siteOn ? 80 : 0.12; controls.maxDistance = siteOn ? 1500 : 90;
   controls.maxPolarAngle = siteOn ? PI * 0.46 : PI * 0.495;
-  site.group.visible = siteOn; hallFloor.visible = !siteOn;
-  bloom.strength = siteOn ? 0.25 : 0.5; renderer.toneMappingExposure = siteOn ? 0.72 : 1.1;
   document.body.classList.toggle('site', siteOn);
 }
 function showSite() {
   stopTour(); if (beamOn) setBeam(false); if (exploded) { exploded = false; exAmt = 0; applyExplode(); $('btn-explode').classList.remove('on'); $('btn-explode').textContent = 'Explode'; }
   fly = null; dive = null; mode = 'site';
-  setEnv(true); site.setReveal(0);
+  site.group.visible = true; site.setReveal(0); site.setFade(1); applyEnv(1); setUi(true);
   camera.position.copy(SITE_POS); controls.target.copy(SITE_TGT);
   controls.enabled = true; controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
   $('landing').classList.remove('gone');
 }
 function showInstrument() {
-  dive = null; mode = 'inst'; setEnv(false);
+  dive = null; mode = 'inst'; site.group.visible = false; applyEnv(0); setUi(false);
   camera.position.copy(HOME_POS); controls.target.copy(HOME_TGT);
   controls.enabled = true; controls.autoRotate = false;
 }
 function startDive() {
   if (mode !== 'site') return;
   mode = 'dive'; controls.enabled = false; controls.autoRotate = false;
-  dive = { t: 0, p0: camera.position.clone(), t0: controls.target.clone(), swapped: false };
+  dive = { t: 0, p0: camera.position.clone(), t0: controls.target.clone() };
   $('landing').classList.add('gone');
 }
-const dA = new THREE.Vector3(), dB = new THREE.Vector3();
+const dA = new THREE.Vector3(), dB = new THREE.Vector3(), sstep = THREE.MathUtils.smoothstep;
 function updateDive(dt) {
   dive.t += dt;
   const u = Math.min(1, dive.t / DIVE_T), e = ease(u);
   dA.lerpVectors(dive.p0, DIVE_POS, e); dB.lerpVectors(DIVE_POS, HOME_POS, e); camera.position.lerpVectors(dA, dB, e);
   dA.lerpVectors(dive.t0, DIVE_TGT, e); dB.lerpVectors(DIVE_TGT, HOME_TGT, e); controls.target.lerpVectors(dA, dB, e);
-  if (!dive.swapped) {
-    site.setReveal(THREE.MathUtils.smoothstep(u, 0.3, 0.52));
-    if (u > 0.585) $('fade').classList.add('on');                  // a short dip hides the change of scale and lighting
-    if (u > 0.64) { dive.swapped = true; setEnv(false); $('fade').classList.remove('on'); }
-  }
-  if (u >= 1) { dive = null; mode = 'inst'; controls.enabled = true; }
+  site.setReveal(sstep(u, 0.2, 0.4));                             // roof and walls of the target building go first
+  applyEnv(1 - sstep(u, 0.36, 0.7));                              // daylight → hall
+  site.setFade(1 - sstep(u, 0.5, 0.78));                          // then the other beamlines and the rest of the site
+  if (uiSite && u > 0.8) setUi(false);
+  if (u >= 1) { site.group.visible = false; applyEnv(0); dive = null; mode = 'inst'; controls.enabled = true; }
 }
 $('btn-dive').onclick = startDive;
 $('btn-skip').onclick = showInstrument;

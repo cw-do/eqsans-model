@@ -59,7 +59,8 @@ export function buildSite(THREE) {
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
-    add(new THREE.Mesh(g, std(0xffffff, { vertexColors: true, roughness: 1 })));
+    const ground = add(new THREE.Mesh(g, std(0xffffff, { vertexColors: true, roughness: 1 })));
+    ground.userData.keep = true;                                   // stays opaque: the hall floor fades in over it
 
     // the grassed spoil mound east of the target building
     const mound = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16, 0, TAU, 0, PI / 2), std(0x8aa35c, { roughness: 1 }));
@@ -215,19 +216,25 @@ export function buildSite(THREE) {
     { text: 'Front end (ion source)', at: [LIN0[0], 18, LIN0[1]] },
   ];
 
-  let t = 0;
+  // every material of the site, so the whole model can dissolve around the instrument
+  const all = new Map();
+  group.traverse((o) => { if (o.material && !o.userData.keep && !all.has(o.material)) all.set(o.material, { base: o.material.opacity, glassy: o.material.transparent }); });
+  let t = 0, reveal = 0, fadeK = 1;
+  const apply = () => {
+    for (const [m, { base, glassy }] of all) {
+      const op = base * fadeK * (fade.includes(m) ? 1 - 0.94 * reveal : 1) * (m === bl6Mat ? 1 - reveal : 1);
+      const tr = glassy || op < 0.999;
+      if (m.transparent !== tr) { m.transparent = tr; m.depthWrite = !tr; m.needsUpdate = true; }
+      m.opacity = op;
+    }
+    tb.visible = reveal < 0.999; bl6.visible = reveal < 0.98;
+  };
   return {
     group, labels,
     // 0 = closed building, 1 = roof and walls dissolved so the instrument hall shows
-    setReveal(k) {
-      for (const m of fade) {
-        const tr = k > 0.001;
-        if (m.transparent !== tr) { m.transparent = tr; m.depthWrite = !tr; m.needsUpdate = true; }
-        m.opacity = 1 - 0.94 * k;
-      }
-      tb.visible = k < 0.999;
-      bl6Mat.opacity = 1 - k; bl6.visible = k < 0.98;
-    },
+    setReveal(k) { reveal = k; apply(); },
+    // 1 = site fully drawn, 0 = dissolved
+    setFade(k) { fadeK = k; apply(); },
     update(dt) {
       t += dt;
       bunches.forEach((b, i) => b.position.copy(curve.getPointAt((t * 0.09 + i / bunches.length) % 1)));
