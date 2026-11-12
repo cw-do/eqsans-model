@@ -228,6 +228,18 @@ function chopperDiscGeo(openDeg) {
   sh.closePath();
   return new THREE.ExtrudeGeometry(sh, { depth: 0.008, bevelEnabled: false, curveSegments: 64 }).translate(0, 0, -0.004);
 }
+// Two chopper systems share the three housings.
+//  4 choppers (to 2025): one disc at T1 and at T2, a double disc at T3; phased from the minimum wavelength.
+//  6 choppers (2026B on): every station is a pair, a (upstream) and b. In the monochromatic mode the a disc opens on
+//  λ1 and the b disc closes on λ2, so each station brackets the band. Distances and opening angles are the finalized
+//  values (drtsans EQSANS_chopper_configurations.json, 2026-03-04).
+const SIX = [
+  { key: 't1', a: { name: '1a', L: 5.6601247 }, b: { name: '1b', L: 5.6757668 }, deg: 129.6 },
+  { key: 't2', a: { name: '2a', L: 7.7601247 }, b: { name: '2b', L: 7.7757668 }, deg: 180 },
+  { key: 't3', a: { name: '3a', L: 9.4978 }, b: { name: '3b', L: 9.5078 }, deg: 230.01 },
+];
+let chopMode = 4;
+const w60 = TAU / PERIOD;
 function makeChopper(key, s, openDeg, edges) {
   const g = onPath(comp(key), s);
   const CY = -0.24;                                                  // disc centre sits below the beam
@@ -237,34 +249,72 @@ function makeChopper(key, s, openDeg, edges) {
     box(0.3, 0.5, 0.5, MAT.dark, 0, CY - 0.68, 0));
   piece(house, [0, 1.5, 0], 0.25);
   const discs = [];
-  edges.forEach((edge, i) => {
+  for (let i = 0; i < 2; i++) {                                      // every housing holds two discs; T1/T2 use one before 2026
     const holder = group(g);
-    holder.position.set((i - (edges.length - 1) / 2) * 0.03, CY, 0);
     holder.rotation.y = PI / 2;
     const disc = new THREE.Mesh(chopperDiscGeo(openDeg), MAT.b4c);
     disc.add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.014, 40).rotateX(PI / 2), MAT.alu));
     disc.add(new THREE.Mesh(new THREE.RingGeometry(0.165, 0.175, 48), MAT.alu));
     holder.add(disc);
-    piece(holder, [0, 0, 1.25 + i * 0.5], 0.4);
-    discs.push({ disc, edge, lam: 4.3 });
+    discs.push({ disc, holder, edge: edges[i] ?? null, tc: 0, on: true, piece: piece(holder, [0, 0, 1.25 + i * 0.5], 0.4) });
     if (i === 0) anchor(key, holder, 0, 0.42, 0);
-  });
+  }
   const motor = cylX(0.07, 0.22, MAT.dark, 0.2, CY, 0);
   g.add(motor); piece(motor, [0.5, 0, 0], 0.4);
-  const half = THREE.MathUtils.degToRad(openDeg) / 2, w = TAU / PERIOD;
+  const half = THREE.MathUtils.degToRad(openDeg) / 2;
   const c = {
-    s, discs,
-    // each disc is phased so that the middle of its cut-out meets the wavelength d.lam
-    phase: (t, d) => { let p = (w * (t - s * d.lam / KV)) % TAU; if (p > PI) p -= TAU; if (p < -PI) p += TAU; return p; },
-    open: (t) => discs.every((d) => Math.abs(c.phase(t, d)) < half),
+    key, s, s4: s, discs, edges, half, open4: half / w60,          // open4: half the opening, in model seconds
+    // each disc is phased so that the middle of its cut-out is in the beam at time d.tc (mod one period)
+    phase: (t, d) => { let p = (w60 * (t - d.tc)) % TAU; if (p > PI) p -= TAU; if (p < -PI) p += TAU; return p; },
+    open: (t) => discs.every((d) => !d.on || Math.abs(c.phase(t, d)) < half),
     // 'lead': the opening edge lets λmin through first; 'trail': the closing edge cuts just after λmax
-    setBand: (lmin, lmax) => { const dl = half / w * KV / s; for (const d of discs) d.lam = d.edge === 'lead' ? lmin + dl : lmax - dl; },
+    setBand: (lmin, lmax) => { for (const d of discs) if (d.edge) d.tc = d.edge === 'lead' ? c.s * lmin / KV + c.open4 : c.s * lmax / KV - c.open4; },
+    layout: () => {                                                  // place the discs a few cm apart (drawn further apart than real)
+      const n = discs.filter((d) => d.on).length;
+      discs.forEach((d, i) => { d.holder.visible = d.on; d.holder.position.set(n === 1 ? 0 : (i - 0.5) * 0.03, CY, 0); d.piece.home.copy(d.holder.position); });
+    },
   };
   choppers.push(c);
 }
 makeChopper('t1', S_T1, 129.6, ['lead']);
 makeChopper('t2', S_T2, 180, ['trail']);
 makeChopper('t3', S_T3, 230, ['lead', 'trail']);    // double disc: one disc sets each edge of the band
+for (const c of choppers) { c.discs.forEach((d) => (d.on = !!d.edge)); c.layout(); }
+
+// Moderator emission (6-chopper mode only): a neutron leaves the moderator t0 after the proton pulse, t0 ~ Gamma(k = 2)
+// with mean = drtsans emission_delay(λ), about 120 µs for cold neutrons. Times here are model seconds (real × 180).
+function emissionDelayUs(l) {
+  if (l < 0.5) return 9.451719 * l;
+  if (l < 1.879329786923) return 0.5 * (1280.5 - 7448.4 * l + 16509 * l ** 2 - 17872 * l ** 3 + 10445 * l ** 4 - 3169.3 * l ** 5 + 392.31 * l ** 6);
+  return 0.5 * (231.99 + 6.4797 * l - 0.5233 * l ** 2 + 0.0148 * l ** 3);
+}
+const US = PERIOD / 16666.667;                                      // one real microsecond in model seconds
+const meanDelay = (l) => (chopMode === 6 ? emissionDelayUs(l) * US : 0);
+const sampleDelay = (l) => (chopMode === 6 ? -emissionDelayUs(l) / 2 * Math.log(Math.random() * Math.random() + 1e-12) * US : 0);
+let MONO_C = 6, MONO_DL = 0.1;                                       // 6-chopper request: centre wavelength and Δλ/λ (full width)
+
+// Pulse-aware monochromatic phasing. Station 3, the farthest and so the sharpest, sets both band edges: 3a opens and 3b
+// closes on the emission-delayed arrival of λ1 and λ2, so the transmission crosses 50 % at the requested edges. Stations
+// 1 and 2 open just wide enough not to clip any in-band neutron (to the 99 % emission point) and no wider, which removes
+// the stray wavelengths that would otherwise pass station 3 in other turns of its disc.
+function setMono() {
+  const sDet = S_SAMPLE + SDD, bw = KV * PERIOD / sDet;              // the widest band one frame holds
+  const dlMax = Math.min(0.6, bw / MONO_C);
+  const dl = Math.min(MONO_DL, dlMax);
+  const l1 = MONO_C * (1 - dl / 2), l2 = MONO_C * (1 + dl / 2), margin = 30 * US;
+  SIX.forEach((st, k) => {
+    const c = choppers[k], To = c.open4 * 2;
+    let o, cl;
+    if (k === 2) { o = st.a.L * l1 / KV + meanDelay(l1); cl = st.b.L * l2 / KV + meanDelay(l2); }
+    else { o = st.a.L * l1 / KV - margin; cl = st.b.L * l2 / KV + 3.32 * meanDelay(l2) + margin; }
+    if (cl - o > To) { const mid = (o + cl) / 2; o = mid - To / 2; cl = mid + To / 2; }   // a pair cannot stay open longer than one cut-out
+    c.discs[0].tc = o + To / 2; c.discs[1].tc = cl - To / 2;         // a: opening edge at o; b: closing edge at cl
+  });
+  LAM_MIN = l1; LAM_MAX = l2; LAM_C = MONO_C;
+  $('lc-out').textContent = MONO_C.toFixed(1) + ' Å';
+  $('dl-out').textContent = (dl * 100).toFixed(0) + ' %' + (dl < MONO_DL ? ' (frame limit)' : '');
+  $('tof-band').textContent = `${MONO_C.toFixed(1)} Å ± ${(dl * 50).toFixed(dl < 0.04 ? 1 : 0)} %  (${l1.toFixed(2)} – ${l2.toFixed(2)} Å)`;
+}
 
 // ───────────────────────── monitor, slit wheels, secondary shutter, guard slits ─────────────────────────
 const apertures = [];                         // {s, r} — where badly-collimated neutrons are absorbed
@@ -688,7 +738,8 @@ function emitPulse() {
   for (let n = 0; n < 720; n++) {
     const i = spawn(); if (i < 0) return;
     const lam = 0.8 + (lamEmitMax() - 0.8) * Math.pow(Math.random(), 1.8);            // cold-moderator-like spectrum
-    P.st[i] = 1; P.lam[i] = lam; P.v[i] = KV / lam; P.s[i] = -Math.random() * 0.25;
+    P.st[i] = 1; P.lam[i] = lam; P.v[i] = KV / lam;
+    P.s[i] = chopMode === 6 ? -P.v[i] * sampleDelay(lam) : -Math.random() * 0.25;   // 6-chopper mode: a real emission-time spread
     P.au[i] = (Math.random() * 2 - 1) * 0.019; P.av[i] = (Math.random() * 2 - 1) * 0.019;
     P.ku[i] = 0.6 + Math.random() * 2.2; P.kv[i] = 0.6 + Math.random() * 2.2;
     P.u0[i] = Math.random() * TAU; P.v0[i] = Math.random() * TAU;   // wobble phases while in the guide
@@ -819,7 +870,13 @@ function setTof(on) {
 }
 $('btn-tof').onclick = () => setTof(!tofOn);
 $('tof-close').onclick = () => setTof(false);
-const TOF_LAMS = []; for (let l = 0.9; l <= 22.01; l += 0.2) TOF_LAMS.push(l);
+const TOF_LAMS = []; for (let l = 0.9; l <= 22.01; l += 0.2) TOF_LAMS.push([l, false]);
+function tofLams6() {                                   // coarse everywhere, fine across the monochromatic band
+  const w = LAM_MAX - LAM_MIN, lo = LAM_MIN - 0.6 * w - 0.15, hi = LAM_MAX + 0.6 * w + 0.15, out = [];
+  for (let l = 0.9; l <= 22.01; l += 0.4) if (l < lo || l > hi) out.push([l, false]);
+  for (let l = lo; l <= hi; l += (hi - lo) / 28) out.push([l, false], [l, true]);
+  return out.sort((a, b) => a[0] - b[0]);
+}
 const tofCv = $('tofplot'), tofCtx = tofCv.getContext('2d');
 function drawTof() {
   const c = tofCtx, W = tofCv.width, H = tofCv.height, L = 140, R = 12, T = 14, B = 40;
@@ -829,7 +886,9 @@ function drawTof() {
   c.clearRect(0, 0, W, H);
   c.font = '500 19px Inter, sans-serif'; c.textBaseline = 'middle'; c.lineCap = 'butt';
   // distance axis: the stations a neutron passes
-  const rows = [['Source', 0], ['T1', S_T1], ['T2', S_T2], ['T3', S_T3], ['Sample', S_SAMPLE], ['Detector', sDet]];
+  const rows = chopMode === 6
+    ? [['Source', 0], ['1a/1b', choppers[0].s], ['2a/2b', choppers[1].s], ['3a/3b', choppers[2].s], ['Sample', S_SAMPLE], ['Detector', sDet]]
+    : [['Source', 0], ['T1', S_T1], ['T2', S_T2], ['T3', S_T3], ['Sample', S_SAMPLE], ['Detector', sDet]];
   c.textAlign = 'right';
   for (const [name, d] of rows) {
     c.strokeStyle = 'rgba(255,255,255,0.13)'; c.lineWidth = 1; c.beginPath(); c.moveTo(L, Y(d)); c.lineTo(W - R, Y(d)); c.stroke();
@@ -843,25 +902,28 @@ function drawTof() {
   }
   // rays: one per wavelength per pulse, stopped by the first closed chopper
   c.lineWidth = 1.8;
+  // 6-chopper mode: rays leave at the mean emission delay, and the band gets extra, finer rays plus a late-emission twin
+  const lams = chopMode === 6 ? tofLams6() : TOF_LAMS;
   for (const tk of pulseTimes) {
     if (tk > simT) continue;
-    for (const lam of TOF_LAMS) {
+    for (const [lam, late] of lams) {
       if (lam > lamEmitMax()) break;
-      const v = KV / lam; let stop = sDet, cut = false;
-      for (const ch of choppers) if (!ch.open(tk + ch.s / v)) { stop = ch.s; cut = true; break; }
-      const d = Math.min(stop, v * (simT - tk)), tEnd = tk + d / v;
+      const v = KV / lam, te = tk + (late ? 3 : 1) * meanDelay(lam); let stop = sDet, cut = false;
+      if (te > simT) continue;
+      for (const ch of choppers) if (!ch.open(te + ch.s / v)) { stop = ch.s; cut = true; break; }
+      const d = Math.min(stop, v * (simT - te)), tEnd = te + d / v;
       if (tEnd < t0) continue;
       const hue = 0.76 * (1 - THREE.MathUtils.clamp((lam - 1) / (LAM_TOP - 1), 0, 1)) * 360;
-      c.strokeStyle = `hsla(${hue},100%,58%,${cut ? 0.5 : 0.95})`;
-      c.beginPath(); c.moveTo(X(tk), Y(0)); c.lineTo(X(tEnd), Y(d)); c.stroke();
+      c.strokeStyle = `hsla(${hue},100%,58%,${cut ? (late ? 0.25 : 0.5) : late ? 0.6 : 0.95})`;
+      c.beginPath(); c.moveTo(X(te), Y(0)); c.lineTo(X(tEnd), Y(d)); c.stroke();
       if (d >= sDet) { c.fillStyle = `hsl(${hue},100%,62%)`; c.beginPath(); c.arc(X(tEnd), Y(d), 3.4, 0, TAU); c.fill(); }
     }
   }
-  // band edges: λmin and λmax of one pulse reach the detector exactly one period apart
+  // band edges: λmin and λmax of one pulse (4 choppers: they reach the detector exactly one period apart)
   c.strokeStyle = 'rgba(255,255,255,0.75)'; c.lineWidth = 1.5; c.setLineDash([3, 4]);
   for (const tk of pulseTimes) for (const lam of [LAM_MIN, LAM_MAX]) {
-    const d = Math.min(sDet, KV / lam * (simT - tk)); if (d <= 0) continue;
-    c.beginPath(); c.moveTo(X(tk), Y(0)); c.lineTo(X(tk + d * lam / KV), Y(d)); c.stroke();
+    const te = tk + meanDelay(lam), d = Math.min(sDet, KV / lam * (simT - te)); if (d <= 0) continue;
+    c.beginPath(); c.moveTo(X(te), Y(0)); c.lineTo(X(te + d * lam / KV), Y(d)); c.stroke();
   }
   c.setLineDash([]);
   // choppers: a thick bar while the disc blocks the beam, a gap while the cut-out is in it
@@ -981,7 +1043,10 @@ $('sdd').oninput = (e) => {
 };
 // Frame-overlap rule: the band is just wide enough that λmin and λmax, leaving in the same pulse,
 // arrive at the detector one source period (1/60 s) apart. The choppers are re-phased to cut exactly that band.
-function setBand(lmin = LAM_MIN) {
+let LMIN4 = LAM_MIN;
+function setBand(lmin = LMIN4) {
+  if (chopMode === 6) { setMono(); return; }
+  LMIN4 = lmin;
   LAM_MIN = lmin; LAM_MAX = lmin + KV * PERIOD / (S_SAMPLE + SDD); LAM_C = (LAM_MIN + LAM_MAX) / 2;
   for (const c of choppers) c.setBand(LAM_MIN, LAM_MAX);
   const txt = `${LAM_MIN.toFixed(1)} – ${LAM_MAX.toFixed(1)} Å`;
@@ -989,6 +1054,49 @@ function setBand(lmin = LAM_MIN) {
 }
 setBand();
 $('lmin').oninput = (e) => { setBand(+e.target.value); clearData(); };
+$('lc').oninput = (e) => { MONO_C = +e.target.value; setMono(); clearData(); };
+$('dl').oninput = (e) => { MONO_DL = +e.target.value / 100; setMono(); clearData(); };
+
+// 4 ↔ 6 choppers. The housings stay; T1 and T2 gain their upstream "a" disc and every station becomes a pair.
+const CHOP_INFO = {
+  4: {
+    t1: { name: 'Chopper T1', loc: '5.70 m' }, t2: { name: 'Chopper T2', loc: '7.80 m' }, t3: { name: 'Chopper T3 (double disc)', loc: '9.50 m' },
+  },
+  6: {
+    t1: { name: 'Chopper pair 1a / 1b', loc: '5.660 / 5.676 m', text: 'Since 2026B station 1 holds two 129.6° discs 15.6 mm apart: the new upstream 1a and the original disc, now 1b. In the monochromatic mode 1a opens on the short-wavelength edge of the band and 1b closes on the long one. Neutrons leave the moderator over a few hundred µs; this close to the source that spread still smears a disc edge over about 0.2 Å, so station 1 is set a little wide. It only removes stray wavelengths that would slip through station 3 on another turn of its discs.' },
+    t2: { name: 'Chopper pair 2a / 2b', loc: '7.760 / 7.776 m', text: 'Station 2: two 180° discs 15.6 mm apart, 2a upstream and 2b downstream. Like station 1 it brackets the band from slightly outside, so that every wavelength except the selected one meets a closed disc somewhere along the line.' },
+    t3: { name: 'Chopper pair 3a / 3b', loc: '9.498 / 9.508 m', text: 'Station 3: two 230° discs 10 mm apart. Being farthest from the source, it sets the band: 3a opens when the shortest wanted wavelength arrives and 3b closes on the longest — each timed for the neutrons\' average emission delay of about 120 µs, so the band is centred where it was asked for. Choose the wavelength and Δλ/λ in the detector window.' },
+  },
+};
+const INFO4 = { t1: infoBy.t1.text, t2: infoBy.t2.text, t3: infoBy.t3.text };
+function setChopMode(n) {
+  chopMode = n;
+  SIX.forEach((st, k) => {
+    const c = choppers[k];
+    c.s = n === 6 ? (st.a.L + st.b.L) / 2 : c.s4;
+    c.discs.forEach((d, i) => (d.on = n === 6 || !!c.edges[i]));
+    c.layout();
+    const inf = CHOP_INFO[n][c.key], it = infoBy[c.key];
+    it.name = inf.name; it.loc = inf.loc; it.text = inf.text ?? INFO4[c.key];
+    labelEls[c.key].textContent = it.name.replace(/ \(.*\)| & .*/, '');
+    const b = document.querySelector(`#partlist button[data-key="${c.key}"]`);
+    if (b) b.innerHTML = `<span>${it.name}</span><small>${it.loc}</small>`;
+    if (selected === c.key) select(c.key, false);
+  });
+  $('btn-chop').classList.toggle('on', n === 6);
+  $('btn-chop').textContent = n === 6 ? '6 choppers (2026)' : '4 choppers';
+  $('lmin-row').hidden = n === 6; $('lc-row').hidden = n !== 6; $('dl-row').hidden = n !== 6;
+  $('tof-hint').textContent = n === 6
+    ? 'Six discs in three pairs. Station 3 sets the band edges; stations 1 and 2 bracket it slightly wider and stop stray wavelengths. Rays start at the moderator\'s mean emission delay, faint twins at a late (99 %) one. Fewer neutrons pass: that is the price of a narrow band.'
+    : TOF_HINT4;
+  $('hud-hint').textContent = n === 6
+    ? 'Bead colour = neutron wavelength. Six discs in three pairs pass one narrow band around λ, so far fewer neutrons reach the sample than with the full 4-chopper band.'
+    : HUD_HINT4;
+  setBand(); clearData();
+  if (beamOn) { clearNeutrons(); pulseTimes.length = 0; }
+}
+const TOF_HINT4 = $('tof-hint').textContent, HUD_HINT4 = $('hud-hint').textContent;
+$('btn-chop').onclick = () => setChopMode(chopMode === 6 ? 4 : 6);
 document.querySelectorAll('#lamtop button').forEach((b) => (b.onclick = () => {
   LAM_TOP = +b.dataset.top;
   document.querySelectorAll('#lamtop button').forEach((o) => o.classList.toggle('on', o === b));
@@ -1043,6 +1151,12 @@ const TOUR_TEXT = {
   flight: 'Scattered neutrons fan out through the evacuated tank towards the detector.',
   det: 'Each one lands on the detector. Thousands of hits build the rings of the sphere form factor.',
 };
+const TOUR_TEXT6 = {
+  source: 'A proton pulse hits the target. Neutrons leave the moderator over a few hundred microseconds — on average about 120 µs after the pulse.',
+  t1: 'Pair 1a / 1b — two discs bracket the band from slightly outside. So close to the source the wavelengths have not spread far apart yet, so this pair only sweeps away the far-off ones.',
+  t2: 'Pair 2a / 2b — the same, 2 m further on, where the wavelengths have spread out more.',
+  t3: 'Pair 3a / 3b — 3a opens as the {lo} Å neutrons arrive and 3b closes behind the {hi} Å ones. Only {band} Å gets through: a monochromatic beam.',
+};
 function startTour() {
   if (!beamOn) setBeam(true);
   fly = null;
@@ -1069,7 +1183,7 @@ function updateTour(realDt) {
   else if (sc < xDet) { stage = 'flight'; speed = 0.22; off = [-2.3, 0.75, 1.7]; look = 1.2; }
   else { stage = 'det'; speed = 0.5; off = [-2.6, 0.5, 1.5]; look = 0; tour.hold += realDt; }
   tour.speed = speed;
-  if (stage !== tour.stage) { tour.stage = stage; $('caption').textContent = TOUR_TEXT[stage].replace('{c}', LAM_C.toFixed(1)).replace('{band}', `${LAM_MIN.toFixed(1)}–${LAM_MAX.toFixed(1)}`); }
+  if (stage !== tour.stage) { tour.stage = stage; $('caption').textContent = ((chopMode === 6 && TOUR_TEXT6[stage]) || TOUR_TEXT[stage]).replace('{c}', LAM_C.toFixed(1)).replace('{band}', `${LAM_MIN.toFixed(chopMode === 6 ? 2 : 1)}–${LAM_MAX.toFixed(chopMode === 6 ? 2 : 1)}`).replace('{lo}', LAM_MIN.toFixed(2)).replace('{hi}', LAM_MAX.toFixed(2)); }
   const p = pathAt(Math.min(sc, xDet));
   tgtWant.set(Math.min(p.x + look, xDet), BEAM_Y, p.z);
   camWant.set(p.x + off[0], BEAM_Y + off[1], p.z + off[2]);
@@ -1233,4 +1347,4 @@ drawDetector();
 frame();
 $('loader').classList.add('gone');
 
-window.__eqsans = { startTour, advance: (sec) => { for (let t = 0; t < sec; t += 0.04) step(0.04); }, select, startDive, showSite, showInstrument, get mode() { return mode; }, setHidden, setHud, setTof, setParts, setExplode, setBeam, setXray, flyTo, camera, controls, THREE, get total() { return total; } };
+window.__eqsans = { setChopMode, get chop() { return choppers.map((c) => ({ s: c.s, discs: c.discs.map((d) => ({ on: d.on, tc: d.tc })) })); }, startTour, advance: (sec) => { for (let t = 0; t < sec; t += 0.04) step(0.04); }, select, startDive, showSite, showInstrument, get mode() { return mode; }, setHidden, setHud, setTof, setParts, setExplode, setBeam, setXray, flyTo, camera, controls, THREE, get total() { return total; } };

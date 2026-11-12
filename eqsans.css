@@ -86,7 +86,7 @@ button, input { font: inherit; color: inherit; }
   #parts { top: 60px; bottom: auto; width: 190px; max-height: 46vh; }
   #info { top: 104px; right: 8px; left: 8px; width: auto; }
   #hud { right: 8px; bottom: 104px; width: 230px; padding: 10px; }
-  #hud .hint, #hud label:nth-of-type(3) { display: none; }
+  #hud .hint, #hud label:has(#rs) { display: none; }
   #actions { bottom: 40px; }
   #actions button { padding: 9px 12px; font-size: 12px; }
 }
