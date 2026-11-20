@@ -136,9 +136,9 @@
     <script type="module" src="main.js?v=54"></script>
     <script data-goatcounter="https://eqsans-model.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
     <script>
-      fetch('https://eqsans-model.goatcounter.com/counter/TOTAL.json')
+      fetch('https://eqsans-model.goatcounter.com/counter/' + encodeURIComponent(location.pathname) + '.json')   // per-page count is live; TOTAL lags
         .then(r => r.ok ? r.json() : null)
-        .then(d => { if (d && d.count) document.getElementById('visits').textContent = ' · ' + d.count + ' visitors'; })
+        .then(d => { if (d && d.count && d.count !== '0') document.getElementById('visits').textContent = ' · ' + d.count + ' visitors'; })
         .catch(() => {});
     </script>
   </body>
