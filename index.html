@@ -138,7 +138,8 @@
     <script>
       // page-open counter (every load +1) on CounterAPI, public counter, no key in the page.
       // GoatCounter above keeps the visitor dashboard. Only the github.io copy counts.
-      // /up answers with a buffered (stale) value, so read the live total from /stats afterwards;
+      // Cloudflare caches these GETs for 4 h, so every call carries a unique ?t= or a reload is not counted.
+      // /up answers with a buffered (stale) value, so read the total from /stats afterwards (it can also lag a little);
       // meanwhile show the last number this browser saw.
       (() => {
         const el = document.getElementById('visits'), KEY = 'eqsans-views';
@@ -146,10 +147,12 @@
         const show = n => { el.textContent = ' · ' + Number(n).toLocaleString('en-US') + ' views'; };
         try { const last = localStorage.getItem(KEY); if (last) show(+last + 1); } catch (e) {}
         if (!/github\.io$/.test(location.hostname)) return;
-        fetch(C + '/up')
-          .then(() => fetch(C + '/stats'))
+        const t = () => '?t=' + Date.now() + Math.random().toString(36).slice(2, 7);
+        let mine = 0; try { mine = +(localStorage.getItem(KEY) || 0) + 1; } catch (e) {}
+        fetch(C + '/up' + t(), { cache: 'no-store' })
+          .then(() => fetch(C + '/stats' + t(), { cache: 'no-store' }))
           .then(r => r.ok ? r.json() : null)
-          .then(d => { const n = d && d.data && d.data.up_count; if (n) { show(n); try { localStorage.setItem(KEY, n); } catch (e) {} } })
+          .then(d => { const n = Math.max(d && d.data && d.data.up_count || 0, mine); if (d && d.data) { show(n); try { localStorage.setItem(KEY, n); } catch (e) {} } })
           .catch(() => {});
       })();
     </script>
