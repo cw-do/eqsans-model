@@ -91,12 +91,13 @@ export function buildSite(THREE) {
     const ground = add(new THREE.Mesh(g, std(0xffffff, { vertexColors: true, roughness: 1 })));
     ground.userData.keep = true;                                   // stays opaque: the hall floor fades in over it
 
-    const N = 9000, trees = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0), std(0xffffff, { roughness: 1 }), N);
+    const N = 4400, trees = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0), std(0xffffff, { roughness: 1 }), N);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3();
     let n = 0;
     while (n < N) {
       const r = 180 + 1900 * Math.sqrt(rnd()), a = rnd() * TAU, x = r * Math.cos(a), z = r * Math.sin(a);
       if (siteDist(x, z) < 12 + rnd() * 30) continue;
+      if (r > 900 && rnd() < 0.6) continue;                     // thin the distant forest: GPU load
       const w = 6 + rnd() * 5;
       s.set(w, 14 + rnd() * 12, w); v.set(x, height(x, z) - 0.5, z);
       trees.setMatrixAt(n, m4.compose(v, q, s));
@@ -261,7 +262,7 @@ export function buildSite(THREE) {
       [W, [[760, 492], [828, 500], [840, 560], [770, 570]], -65],
       [W, [[715, 600], [800, 590], [840, 650], [760, 662]], -30],
     ];
-    const N = 900, cars = new THREE.InstancedMesh(new THREE.BoxGeometry(4.4, 1.5, 1.9).translate(0, 0.75, 0), std(0xffffff, { roughness: 0.4, metalness: 0.3 }), N);
+    const N = 450, cars = new THREE.InstancedMesh(new THREE.BoxGeometry(4.4, 1.5, 1.9).translate(0, 0.75, 0), std(0xffffff, { roughness: 0.4, metalness: 0.3 }), N);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3(), c = new THREE.Color();
     const paint = [0xd9d9d9, 0x2b2b2b, 0x8c1d1d, 0x1f3f6e, 0xf2f2f2, 0x6d6d6d, 0xb9b9b9];
     const inside = (pts, x, z) => { let k = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, zi] = pts[i], [xj, zj] = pts[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) k = !k; } return k; };
@@ -273,7 +274,7 @@ export function buildSite(THREE) {
       const a0 = Math.min(...along), a1 = Math.max(...along), b0 = Math.min(...across), b1 = Math.max(...across);
       for (let b = b0 + 4; b < b1 - 2; b += 17) for (const db of [0, 5.4]) for (let a = a0 + 2; a < a1 - 2 && n < N; a += 2.8) {
         const x = a * ux + (b + db) * nx, z = a * uz + (b + db) * nz;
-        if (!inside(pts, x, z) || rnd() < 0.55) continue;
+        if (!inside(pts, x, z) || rnd() < 0.775) continue;
         v.set(x, 0.05, z);
         cars.setMatrixAt(n, m4.compose(v, q.setFromEuler(e.set(0, -(psi + PI / 2), 0)), s));
         cars.setColorAt(n, c.setHex(paint[Math.floor(rnd() * paint.length)])); n++;

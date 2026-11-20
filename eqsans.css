@@ -139,6 +139,7 @@ body.site #labels, body.site #parts, body.site #actions, body.site #hud, body.si
 #disclaimer p { margin: 0; flex: 1; }
 #disclaimer .credit { flex: none; text-align: right; color: var(--ink); font-weight: 600; white-space: nowrap; }
 #disclaimer i { font-style: normal; }
+#visits { font-weight: 400; color: var(--ink-2); font-size: 10px; }
 #disclaimer b { color: #ffcf6b; font-weight: 600; margin-right: 4px; }
 #disclaimer .d-site { display: none; }
 body.site #disclaimer .d-site { display: inline; }
