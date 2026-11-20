@@ -137,11 +137,17 @@
     <script data-goatcounter="https://eqsans-model.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
     <script>
       // page-open counter (every load +1); GoatCounter above keeps the visitor dashboard. Local copies are not counted.
-      if (/github\.io$/.test(location.hostname))
+      // Abacus can take 10-20 s to answer, so show the last number this browser saw at once and replace it when the reply comes.
+      (() => {
+        const el = document.getElementById('visits'), KEY = 'eqsans-views';
+        const show = n => { el.textContent = ' · ' + Number(n).toLocaleString('en-US') + ' views'; };
+        try { const last = localStorage.getItem(KEY); if (last) show(+last + 1); } catch (e) {}
+        if (!/github\.io$/.test(location.hostname)) return;
         fetch('https://abacus.jasoncameron.dev/hit/cw-do-eqsans-model/views')
           .then(r => r.ok ? r.json() : null)
-          .then(d => { if (d && d.value) document.getElementById('visits').textContent = ' · ' + d.value.toLocaleString('en-US') + ' views'; })
+          .then(d => { if (d && d.value) { show(d.value); try { localStorage.setItem(KEY, d.value); } catch (e) {} } })
           .catch(() => {});
+      })();
     </script>
   </body>
 </html>
